@@ -1,0 +1,301 @@
+-----------------------------------------------------------------------------------------
+--                          [ ส่วนการตั้งค่า (SETTINGS) ]                              --
+-----------------------------------------------------------------------------------------
+local SETTINGS = {
+    -- ชื่อไบโอมที่ต้องการ (ไม่ต้องสนตัวพิมพ์เล็กใหญ่ หรือปีกกา [ ])
+    TargetBiome = "Ocean",
+    
+    -- รายชื่อไอเทมที่จะใช้ (ระบบจะรันจากบนลงล่าง)
+    -- ถ้าอันแรกไม่มีหรือไม่ทำงาน มันจะข้ามไปทำอันถัดไปทันที
+    Items = {
+        "Eternal Potion III",
+        "Eternal Potion II",
+        "Eternal Potion I"
+    },
+
+    ItemAmount  = 1,    -- จำนวนที่จะใช้ต่อครั้ง
+    SpamSpeed   = 0.1   -- ความเร็วในการรัว (วินาที) ยิ่งน้อยยิ่งเร็ว
+}
+
+-----------------------------------------------------------------------------------------
+--                      [ เริ่มต้นระบบ (SYSTEM START) ]                                --
+-----------------------------------------------------------------------------------------
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local VirtualUser = game:GetService("VirtualUser")
+local Debris = game:GetService("Debris")
+local LocalPlayer = Players.LocalPlayer
+
+-- เตรียมข้อมูล Remote
+local TARGET_BIOME_KEYWORD = string.lower(SETTINGS.TargetBiome)
+local REMOTE = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("RequestUseItem")
+
+-- ตัวแปรสถานะระบบ
+local isScriptActive = true 
+local isAutoEnabled = true  
+local isProcessing = false
+
+-----------------------------------------------------------------------------------------
+--                         [ 1. ระบบ ANTI-AFK (Hidden) ]                               --
+-----------------------------------------------------------------------------------------
+LocalPlayer.Idled:Connect(function()
+    VirtualUser:CaptureController()
+    VirtualUser:ClickButton2(Vector2.new())
+    print(">> Anti-AFK: Prevented Kick.")
+end)
+
+-----------------------------------------------------------------------------------------
+--                       [ 2. ระบบ MERCHANT DETECTOR ]                                 --
+-----------------------------------------------------------------------------------------
+task.spawn(function()
+    -- รอหาโฟลเดอร์ Merchant สูงสุด 10 วินาที
+    local MerchantFolder = workspace:WaitForChild("Merchant", 10) or workspace:FindFirstChild("Merchant")
+    
+    if MerchantFolder then
+        print(">> Merchant System: Active")
+        
+        MerchantFolder.ChildAdded:Connect(function(newModel)
+            task.wait(1) -- รอโหลดโมเดลนิดนึง
+            if newModel:IsA("Model") then
+                -- 1. เล่นเสียง
+                local sound = Instance.new("Sound")
+                sound.SoundId = "rbxassetid://1650267851"
+                sound.Volume = 5
+                sound.Parent = game:GetService("SoundService")
+                sound:Play()
+                Debris:AddItem(sound, 5) -- ลบเสียงทิ้งหลังเล่นจบ
+                
+                -- 2. วาร์ปไปหา
+                if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                    local targetPivot = newModel:GetPivot()
+                    LocalPlayer.Character.HumanoidRootPart.CFrame = targetPivot + Vector3.new(0, 3, 0)
+                    print(">> MERCHANT FOUND! Teleported to: " .. newModel.Name)
+                end
+            end
+        end)
+    else
+        warn(">> Merchant System: Folder not found.")
+    end
+end)
+
+-----------------------------------------------------------------------------------------
+--                            [ 3. สร้าง GUI LIBRARY ]                                 --
+-----------------------------------------------------------------------------------------
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "GenesisAutoBiome"
+ScreenGui.ResetOnSpawn = false
+if syn and syn.protect_gui then 
+    syn.protect_gui(ScreenGui) 
+    ScreenGui.Parent = game:GetService("CoreGui") 
+elseif gethui then 
+    ScreenGui.Parent = gethui() 
+else 
+    ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui") 
+end
+
+-- Frame หลัก
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.Size = UDim2.new(0, 300, 0, 260)
+MainFrame.Position = UDim2.new(0.5, -150, 0.5, -130)
+MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+MainFrame.BorderSizePixel = 0
+MainFrame.Active = true
+MainFrame.Draggable = true
+MainFrame.Parent = ScreenGui
+
+local UICorner = Instance.new("UICorner")
+UICorner.CornerRadius = UDim.new(0, 8)
+UICorner.Parent = MainFrame
+
+-- หัวข้อ (Title)
+local Title = Instance.new("TextLabel")
+Title.Text = "AUTO BIOME: " .. string.upper(SETTINGS.TargetBiome)
+Title.Size = UDim2.new(1, 0, 0, 40)
+Title.BackgroundTransparency = 1
+Title.TextColor3 = Color3.fromRGB(255, 80, 80)
+Title.Font = Enum.Font.GothamBold
+Title.TextSize = 20
+Title.Parent = MainFrame
+
+local Line = Instance.new("Frame")
+Line.Size = UDim2.new(1, 0, 0, 2)
+Line.Position = UDim2.new(0, 0, 0, 40)
+Line.BackgroundColor3 = Color3.fromRGB(255, 80, 80)
+Line.BorderSizePixel = 0
+Line.Parent = MainFrame
+
+-- แสดง Biome ปัจจุบัน
+local LabelCurrent = Instance.new("TextLabel")
+LabelCurrent.Text = "   Current: ..."
+LabelCurrent.Size = UDim2.new(1, -20, 0, 30)
+LabelCurrent.Position = UDim2.new(0, 10, 0, 50)
+LabelCurrent.BackgroundTransparency = 0.8
+LabelCurrent.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+LabelCurrent.TextColor3 = Color3.fromRGB(255, 255, 255)
+LabelCurrent.Font = Enum.Font.Gotham
+LabelCurrent.TextSize = 14
+LabelCurrent.TextXAlignment = Enum.TextXAlignment.Left
+LabelCurrent.Parent = MainFrame
+Instance.new("UICorner", LabelCurrent).CornerRadius = UDim.new(0, 4)
+
+-- แสดง Target
+local LabelTarget = Instance.new("TextLabel")
+LabelTarget.Text = "   Target: " .. SETTINGS.TargetBiome
+LabelTarget.Size = UDim2.new(1, -20, 0, 30)
+LabelTarget.Position = UDim2.new(0, 10, 0, 90)
+LabelTarget.BackgroundTransparency = 0.8
+LabelTarget.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+LabelTarget.TextColor3 = Color3.fromRGB(200, 200, 200)
+LabelTarget.Font = Enum.Font.Gotham
+LabelTarget.TextSize = 14
+LabelTarget.TextXAlignment = Enum.TextXAlignment.Left
+LabelTarget.Parent = MainFrame
+Instance.new("UICorner", LabelTarget).CornerRadius = UDim.new(0, 4)
+
+-- แสดง Status
+local LabelStatus = Instance.new("TextLabel")
+LabelStatus.Text = "Status: Idle"
+LabelStatus.Size = UDim2.new(1, -20, 0, 30)
+LabelStatus.Position = UDim2.new(0, 10, 0, 130)
+LabelStatus.BackgroundTransparency = 1
+LabelStatus.TextColor3 = Color3.fromRGB(255, 200, 100)
+LabelStatus.Font = Enum.Font.GothamBold
+LabelStatus.TextSize = 14
+LabelStatus.Parent = MainFrame
+
+-- ปุ่มเปิด/ปิด (Toggle)
+local ToggleBtn = Instance.new("TextButton")
+ToggleBtn.Text = "ON"
+ToggleBtn.Size = UDim2.new(0.4, 0, 0, 35)
+ToggleBtn.Position = UDim2.new(0.05, 0, 0.8, 0)
+ToggleBtn.BackgroundColor3 = Color3.fromRGB(50, 200, 100)
+ToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+ToggleBtn.Font = Enum.Font.GothamBold
+ToggleBtn.TextSize = 16
+ToggleBtn.Parent = MainFrame
+Instance.new("UICorner", ToggleBtn).CornerRadius = UDim.new(0, 6)
+
+-- ปุ่มทำลาย (Destroy)
+local DestroyBtn = Instance.new("TextButton")
+DestroyBtn.Text = "DESTROY"
+DestroyBtn.Size = UDim2.new(0.4, 0, 0, 35)
+DestroyBtn.Position = UDim2.new(0.55, 0, 0.8, 0)
+DestroyBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+DestroyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+DestroyBtn.Font = Enum.Font.GothamBold
+DestroyBtn.TextSize = 14
+DestroyBtn.Parent = MainFrame
+Instance.new("UICorner", DestroyBtn).CornerRadius = UDim.new(0, 6)
+
+-- ปุ่มย่อหน้าต่าง (-)
+local MinBtn = Instance.new("TextButton")
+MinBtn.Text = "-"
+MinBtn.Size = UDim2.new(0, 30, 0, 30)
+MinBtn.Position = UDim2.new(1, -35, 0, 5)
+MinBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+MinBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+MinBtn.Font = Enum.Font.GothamBold
+MinBtn.TextSize = 18
+MinBtn.Parent = MainFrame
+Instance.new("UICorner", MinBtn).CornerRadius = UDim.new(0, 4)
+
+-- ปุ่มเปิดหน้าต่างเล็ก (Open)
+local OpenBtn = Instance.new("TextButton")
+OpenBtn.Name = "OpenButton"
+OpenBtn.Text = "Genesis UI"
+OpenBtn.Size = UDim2.new(0, 100, 0, 30)
+OpenBtn.Position = UDim2.new(0, 20, 0.9, -40)
+OpenBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
+OpenBtn.TextColor3 = Color3.fromRGB(255, 80, 80)
+OpenBtn.Font = Enum.Font.GothamBold
+OpenBtn.Visible = false
+OpenBtn.Parent = ScreenGui
+Instance.new("UICorner", OpenBtn).CornerRadius = UDim.new(0, 6)
+
+-----------------------------------------------------------------------------------------
+--                          [ GUI LOGIC & FUNCTIONS ]                                  --
+-----------------------------------------------------------------------------------------
+
+-- ฟังก์ชันปุ่ม Toggle
+ToggleBtn.MouseButton1Click:Connect(function()
+    isAutoEnabled = not isAutoEnabled
+    if isAutoEnabled then
+        ToggleBtn.Text = "ON"
+        ToggleBtn.BackgroundColor3 = Color3.fromRGB(50, 200, 100)
+    else
+        ToggleBtn.Text = "OFF"
+        ToggleBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+        LabelStatus.Text = "Status: Disabled"
+        LabelStatus.TextColor3 = Color3.fromRGB(150, 150, 150)
+    end
+end)
+
+-- ฟังก์ชันปุ่ม ย่อ/ขยาย
+local isMin = false
+local function ToggleGuiVisibility()
+    isMin = not isMin
+    MainFrame.Visible = not isMin
+    OpenBtn.Visible = isMin
+end
+MinBtn.MouseButton1Click:Connect(ToggleGuiVisibility)
+OpenBtn.MouseButton1Click:Connect(ToggleGuiVisibility)
+
+-- ฟังก์ชันปุ่ม Destroy
+DestroyBtn.MouseButton1Click:Connect(function()
+    isScriptActive = false -- สั่งหยุด Loop ทั้งหมด
+    ScreenGui:Destroy()
+    print(">> Script Destroyed.")
+end)
+
+-----------------------------------------------------------------------------------------
+--                          [ 4. MAIN SPAM LOGIC ]                                     --
+-----------------------------------------------------------------------------------------
+RunService.Heartbeat:Connect(function()
+    if not isScriptActive then return end
+
+    pcall(function()
+        local mainGui = LocalPlayer.PlayerGui:FindFirstChild("MainGui")
+        local biomeLabel = mainGui and mainGui:FindFirstChild("Biome")
+        
+        if biomeLabel then
+            local rawText = biomeLabel.Text
+            LabelCurrent.Text = "   Current: " .. rawText
+            
+            if isAutoEnabled then
+                local currentText = string.lower(rawText)
+                
+                -- ตรวจสอบว่ามีคำว่าไบโอมที่ตั้งค่าไว้หรือไม่
+                if string.find(currentText, TARGET_BIOME_KEYWORD) then
+                    LabelStatus.Text = "Status: SPAMMING ITEM!!!"
+                    LabelStatus.TextColor3 = Color3.fromRGB(255, 0, 0)
+                    
+                    if not isProcessing then
+                        isProcessing = true
+                        
+                        task.spawn(function()
+                            -- วนลูปยิง Remote ทุกไอเทมที่ตั้งค่าไว้
+                            for _, itemName in ipairs(SETTINGS.Items) do
+                                pcall(function()
+                                    local args = { itemName, SETTINGS.ItemAmount }
+                                    REMOTE:InvokeServer(unpack(args))
+                                end)
+                            end
+                            
+                            task.wait(SETTINGS.SpamSpeed)
+                            isProcessing = false
+                        end)
+                    end
+                else
+                    LabelStatus.Text = "Status: Scanning..."
+                    LabelStatus.TextColor3 = Color3.fromRGB(255, 200, 100)
+                end
+            end
+        else
+            LabelCurrent.Text = "   Current: GUI not found"
+        end
+    end)
+end)
+
+print(">> Genesis Full Script Loaded. Target: " .. SETTINGS.TargetBiome)
