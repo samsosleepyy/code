@@ -1,5 +1,6 @@
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local LocalPlayer = Players.LocalPlayer
 
 local TARGET_NAMES = {"Candy", "Gift"}
@@ -17,7 +18,7 @@ local ToggleBtn = Instance.new("TextButton")
 local DestroyBtn = Instance.new("TextButton")
 local UICorner = Instance.new("UICorner")
 
-ScreenGui.Name = "FarmCounterLib"
+ScreenGui.Name = "FarmFullAutoLib"
 ScreenGui.Parent = game.CoreGui or LocalPlayer:WaitForChild("PlayerGui")
 ScreenGui.ResetOnSpawn = false
 
@@ -39,7 +40,7 @@ Title.BackgroundTransparency = 1
 Title.Position = UDim2.new(0, 0, 0, 5)
 Title.Size = UDim2.new(1, 0, 0, 25)
 Title.Font = Enum.Font.GothamBold
-Title.Text = "Farm & Count"
+Title.Text = "Farm & Auto Remote"
 Title.TextColor3 = Color3.fromRGB(255, 170, 0)
 Title.TextSize = 18
 
@@ -83,9 +84,7 @@ BtnCorner2.Parent = DestroyBtn
 
 local function isTarget(name)
     for _, targetName in ipairs(TARGET_NAMES) do
-        if name == targetName then
-            return true
-        end
+        if name == targetName then return true end
     end
     return false
 end
@@ -130,6 +129,30 @@ task.spawn(function()
         else
             task.wait(0.5)
         end
+    end
+end)
+
+task.spawn(function()
+    while isRunning do
+        if isFarming then
+            pcall(function()
+                local args = {"Pick", "Extreme"}
+                ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("GameModes"):WaitForChild("XMasDifficulties"):FireServer(unpack(args))
+            end)
+        end
+        task.wait(0.5)
+    end
+end)
+
+task.spawn(function()
+    while isRunning do
+        if isFarming then
+            pcall(function()
+                local args = {"Vote"}
+                ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Upboard"):FireServer(unpack(args))
+            end)
+        end
+        task.wait(0.5)
     end
 end)
 
