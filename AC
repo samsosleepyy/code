@@ -1,0 +1,151 @@
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local LocalPlayer = Players.LocalPlayer
+
+local TARGET_NAMES = {"Candy", "Gift"}
+local HITBOX_NAME = "Hitbox"
+local TELEPORT_DELAY = 0.15
+local isFarming = true
+local isRunning = true
+local totalCollected = 0
+
+local ScreenGui = Instance.new("ScreenGui")
+local MainFrame = Instance.new("Frame")
+local Title = Instance.new("TextLabel")
+local CountLabel = Instance.new("TextLabel")
+local ToggleBtn = Instance.new("TextButton")
+local DestroyBtn = Instance.new("TextButton")
+local UICorner = Instance.new("UICorner")
+
+ScreenGui.Name = "FarmCounterLib"
+ScreenGui.Parent = game.CoreGui or LocalPlayer:WaitForChild("PlayerGui")
+ScreenGui.ResetOnSpawn = false
+
+MainFrame.Name = "MainFrame"
+MainFrame.Parent = ScreenGui
+MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+MainFrame.Position = UDim2.new(0.05, 0, 0.4, 0)
+MainFrame.Size = UDim2.new(0, 200, 0, 160)
+MainFrame.Active = true
+MainFrame.Draggable = true
+
+local Corner = Instance.new("UICorner")
+Corner.CornerRadius = UDim.new(0, 8)
+Corner.Parent = MainFrame
+
+Title.Name = "Title"
+Title.Parent = MainFrame
+Title.BackgroundTransparency = 1
+Title.Position = UDim2.new(0, 0, 0, 5)
+Title.Size = UDim2.new(1, 0, 0, 25)
+Title.Font = Enum.Font.GothamBold
+Title.Text = "Farm & Count"
+Title.TextColor3 = Color3.fromRGB(255, 170, 0)
+Title.TextSize = 18
+
+CountLabel.Name = "CountLabel"
+CountLabel.Parent = MainFrame
+CountLabel.BackgroundTransparency = 1
+CountLabel.Position = UDim2.new(0, 0, 0.2, 0)
+CountLabel.Size = UDim2.new(1, 0, 0, 20)
+CountLabel.Font = Enum.Font.Gotham
+CountLabel.Text = "Collected: 0"
+CountLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+CountLabel.TextSize = 14
+
+ToggleBtn.Name = "ToggleBtn"
+ToggleBtn.Parent = MainFrame
+ToggleBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 127)
+ToggleBtn.Position = UDim2.new(0.1, 0, 0.4, 0)
+ToggleBtn.Size = UDim2.new(0.8, 0, 0.2, 0)
+ToggleBtn.Font = Enum.Font.GothamSemibold
+ToggleBtn.Text = "Status: ON"
+ToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+ToggleBtn.TextSize = 14
+
+local BtnCorner1 = Instance.new("UICorner")
+BtnCorner1.CornerRadius = UDim.new(0, 6)
+BtnCorner1.Parent = ToggleBtn
+
+DestroyBtn.Name = "DestroyBtn"
+DestroyBtn.Parent = MainFrame
+DestroyBtn.BackgroundColor3 = Color3.fromRGB(170, 0, 0)
+DestroyBtn.Position = UDim2.new(0.1, 0, 0.7, 0)
+DestroyBtn.Size = UDim2.new(0.8, 0, 0.2, 0)
+DestroyBtn.Font = Enum.Font.GothamSemibold
+DestroyBtn.Text = "Destroy UI"
+DestroyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+DestroyBtn.TextSize = 14
+
+local BtnCorner2 = Instance.new("UICorner")
+BtnCorner2.CornerRadius = UDim.new(0, 6)
+BtnCorner2.Parent = DestroyBtn
+
+local function isTarget(name)
+    for _, targetName in ipairs(TARGET_NAMES) do
+        if name == targetName then
+            return true
+        end
+    end
+    return false
+end
+
+local function getAllTargets()
+    local list = {}
+    for _, v in pairs(Workspace:GetDescendants()) do
+        if isTarget(v.Name) and (v:IsA("BasePart") or v:IsA("Model")) then
+            table.insert(list, v)
+        end
+    end
+    return list
+end
+
+local function teleportToPart(part)
+    local character = LocalPlayer.Character
+    if character and character:FindFirstChild("HumanoidRootPart") then
+        local targetCFrame = part:IsA("Model") and part:GetPivot() or part.CFrame
+        character.HumanoidRootPart.CFrame = targetCFrame
+    end
+end
+
+task.spawn(function()
+    while isRunning do
+        if isFarming then
+            local targets = getAllTargets()
+            if #targets > 0 then
+                for _, obj in ipairs(targets) do
+                    if not isFarming or not isRunning then break end
+                    if obj and obj.Parent then
+                        local hitbox = obj:FindFirstChild(HITBOX_NAME)
+                        if hitbox then
+                            teleportToPart(hitbox)
+                            totalCollected = totalCollected + 1
+                            CountLabel.Text = "Collected: " .. tostring(totalCollected)
+                            task.wait(TELEPORT_DELAY)
+                        end
+                    end
+                end
+            end
+            task.wait(1)
+        else
+            task.wait(0.5)
+        end
+    end
+end)
+
+ToggleBtn.MouseButton1Click:Connect(function()
+    isFarming = not isFarming
+    if isFarming then
+        ToggleBtn.Text = "Status: ON"
+        ToggleBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 127)
+    else
+        ToggleBtn.Text = "Status: PAUSED"
+        ToggleBtn.BackgroundColor3 = Color3.fromRGB(170, 85, 0)
+    end
+end)
+
+DestroyBtn.MouseButton1Click:Connect(function()
+    isFarming = false
+    isRunning = false
+    ScreenGui:Destroy()
+end)
